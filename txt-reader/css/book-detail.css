@@ -103,7 +103,7 @@ a:hover {
 
 .content {
     flex: 1;
-    height: 90vh;
+    height: 88vh;
     overflow-y: auto;
     white-space: pre-wrap;
     padding: 1rem;
