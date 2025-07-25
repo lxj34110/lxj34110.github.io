@@ -17,6 +17,10 @@ h1 {
     position: absolute;
 }
 
+#deleteSelected{
+    font-size: 21px;
+}
+
 .custom-file-button {
     display: inline-block;
     background-color: #4CAF50;
@@ -39,7 +43,7 @@ h1 {
     display: inline-block;
     background-color: #4CAF50;
     color: white;
-    padding: 10px 20px;
+    padding: 5px 20px;
     border-radius: 8px;
     cursor: pointer;
     font-size: 1em;
@@ -76,6 +80,9 @@ h1 {
     display: flex;
     gap: 10px;
     margin-left: 15px;
+    font-size: 1.5em;
+    height: 1.5em;
+    align-items: center;
 }
 
 .book-card {
