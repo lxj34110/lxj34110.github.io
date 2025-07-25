@@ -72,7 +72,6 @@ a {
     text-decoration: none;
     font-weight: 500;
     transition: color 0.2s ease;
-    margin-right: 5px;
 }
 
 a:hover {
@@ -150,6 +149,7 @@ a {
     padding: 8px 16px;
     border-radius: 6px;
     transition: all 0.3s ease;
+    margin-right: 1px;
 }
 a:hover {
     background-color: #f0f8f1;
