@@ -73,7 +73,7 @@ a {
     padding: 8px 16px;
     border-radius: 6px;
     transition: all 0.3s ease;
-    /* margin-right: 1px; */
+    margin-right: 3px; 
 }
 
 a:hover {
