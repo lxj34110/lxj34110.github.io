@@ -75,7 +75,8 @@ a {
 }
 
 a:hover {
-    color: #1e3a8a;
+    background-color: #f0f8f1;
+    color: #f0f8f1;
 }
 
 .container {
