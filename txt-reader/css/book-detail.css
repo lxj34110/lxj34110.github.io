@@ -66,16 +66,18 @@ h2 {
     border-bottom: 2px solid #e5e7eb;
 }
 
-
 a {
-    color: #1d4ed8;
+    display: inline-block;
+    color: #4CAF50;
     text-decoration: none;
-    font-weight: 500;
-    transition: color 0.2s ease;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    /* margin-right: 1px; */
 }
 
 a:hover {
-    color: #1e3a8a;
+    color: #f0f8f1;
 }
 
 .container {
@@ -142,19 +144,7 @@ a:hover {
     font-weight: 500;
     border-left: 3px solid #1d4ed8;
 }
-a {
-    display: inline-block;
-    color: #4CAF50;
-    text-decoration: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    transition: all 0.3s ease;
-    margin-right: 1px;
-}
-a:hover {
-    background-color: #f0f8f1;
-    color: #f0f8f1;
-}
+
 .toggle-btn {
     background-color: #4CAF50;
     color: white;
