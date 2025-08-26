@@ -1,1 +1,37 @@
-<!doctypehtml><html lang=zh-CN><meta charset=UTF-8><meta content="width=device-width,initial-scale=1"name=viewport><title>书架</title><link href=../css/book-shelf.css rel=stylesheet><body><script src=../js/auth.js></script><script>document.addEventListener("DOMContentLoaded",function(){window.auth&&window.auth.isLoggedIn()||(window.location.href="login.html")})</script><h1>书架</h1><div class=book-tool><input accept=.txt,.markdown id=fileInput multiple type=file> <label class=toggle-btn for=fileInput>⊕</label> <button class=toggle-btn id=allSelected>☑</button> <button class=toggle-btn id=deleteSelected>〄</button></div><div class=container><div class=book-list id=bookList></div></div><script src=../js/auth.js></script><script src=../js/book-shelf.js></script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>书架</title>
+    <link rel="stylesheet" href="../css/book-shelf.css">
+
+</head>
+<body>
+    <script src="../js/user-auth.js"></script>
+    <script src="../js/indexeddb-helper.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!window.auth || !window.auth.isLoggedIn()) {
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+    <h1>书架</h1>
+    <div class="book-tool">
+        <input type="file" id="fileInput" accept=".txt,.markdown" multiple>
+        <!-- 添加书籍 -->
+        <label class="toggle-btn" for="fileInput">⊕</label>
+        <!-- 批量全选 -->
+        <button id="allSelected" class="toggle-btn">☑</button>
+        <!-- 删除选中 -->
+        <button id="deleteSelected" class="toggle-btn">〄</button>
+    </div>
+    <div class="container">
+        <div class="book-list" id="bookList"></div>
+    </div>
+
+
+    <script src="../js/book-shelf.js"></script>
+</body>
+</html>

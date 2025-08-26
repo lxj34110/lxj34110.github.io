@@ -1,1 +1,87 @@
-<!doctypehtml><html lang=zh-CN><meta charset=UTF-8><meta content="width=device-width,initial-scale=1"name=viewport><title>txt在线阅读工具</title><link href=../css/book-detail.css rel=stylesheet><body><script src=../js/auth.js></script><script>document.addEventListener("DOMContentLoaded",function(){window.auth&&window.auth.isLoggedIn()||(window.location.href="login.html")})</script><h2><label id=txtTitle>在线阅读工具</label></h2><a class=toggle-btn href=book-shelf.html>▦</a><button id=toggleChapters class=toggle-btn>▤</button> <button id=prevChapter class=toggle-btn>☜</button> <button id=nextChapter class=toggle-btn>☞</button> <button id=settingsToggle class=toggle-btn>⚙</button> <button id=editChapter class=toggle-btn>✎</button><div id=editControls style=display:none;margin-top:10px><button id=saveChapterEdit class=toggle-btn>✔</button> <button id=cancelChapterEdit class=toggle-btn>✖</button></div><div class=settings style=display:none><label>行间距：</label> <select id=lineHeight><option value=1.6>默认<option value=1.8>较大<option value=2.0>很大</select> <label>文字大小：</label> <select id=fontSize><option value=1.125rem>默认<option value=1.25rem>较大<option value=1.5rem>很大</select> <label>皮肤：</label> <select id=theme><option value=light>白天<option value=dark>黑夜<option value=eyeCare>护眼</select></div><div class=container><div class=chapter-list id=chapterList style=display:none></div><div class=content id=content contenteditable=false></div><span id=chapterWordCount style=position:absolute;right:0;top:0;width:5px;writing-mode:vertical-rl;font-size:.8em;color:#666></span><div id=editStatus style="display:none;position:absolute;left:10px;top:10px;background:#ffc107;color:#333;padding:3px 8px;border-radius:4px;font-size:.9em">编辑模式</div></div><div class=chapter-buttons id=chapterButtons style=display:none><button id=prevChapterBottom>上一章</button> <button id=nextChapterBottom>下一章</button></div><script src=../js/book-detail.js></script>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>txt在线阅读工具</title>
+    <link rel="stylesheet" href="../css/book-detail.css">
+</head>
+<body>
+    <script src="../js/user-auth.js"></script>
+    <script src="../js/indexeddb-helper.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!window.auth || !window.auth.isLoggedIn()) {
+                window.location.href = 'login.html';
+            }
+        });
+    </script>
+    <h2>
+        <!-- <a href="book-shelf.html" class="book-shelf">书架</a> -->
+        <label id="txtTitle">在线阅读工具</label>
+    </h2>
+    <!-- 书架按钮 -->
+    <a href="book-shelf.html" class="toggle-btn" alt="书架">▦</a>
+    <!-- 显示目录 -->
+    <button id="toggleChapters" class="toggle-btn" alt="显示目录">▤</button>
+
+    <!-- 上一章 -->
+    <button id="prevChapter" class="toggle-btn" alt="上一章">☜</button>
+    <!-- 下一章 -->
+    <button id="nextChapter" class="toggle-btn" alt="下一章">☞</button>
+    <!-- 设置按钮 -->
+    <button id="settingsToggle" class="toggle-btn" alt="设置">⚙</button>
+
+    <!-- 编辑章节按钮 -->
+    <button id="editChapter" class="toggle-btn" alt="编辑章节">✎</button>
+
+    <div id="editControls" style="display: none; margin-top: 10px;">
+        <!-- 保存修改 -->
+        <button id="saveChapterEdit" class="toggle-btn" alt="保存修改">✔</button>
+        <!-- 取消编辑 -->
+        <button id="cancelChapterEdit" class="toggle-btn" alt="取消编辑">✖</button>
+        <!-- 保存到indexdb -->
+        <button id="saveIndexdbEdit" class="toggle-btn" alt="保存到indexdb">☑</button>
+        <!-- 在不影响现有功能逻辑的基础上，在详情页的编辑状态下，为如下按钮新增代码逻辑，增加撤销新增的字符和反撤销功能-->
+        <button id="recallEdit" class="toggle-btn" alt="撤销文字">☾</button>
+        <button id="recoverEdit" class="toggle-btn" alt="恢复文字">☽</button>
+    </div>
+    <div class="settings" style="display: none;">
+        <label>行间距：</label>
+        <select id="lineHeight">
+            <option value="1.6">默认</option>
+            <option value="1.8">较大</option>
+            <option value="2.0">很大</option>
+        </select>
+        <label>文字大小：</label>
+        <select id="fontSize">
+            <option value="1.125rem">默认</option>
+            <option value="1.25rem">较大</option>
+            <option value="1.5rem">很大</option>
+        </select>
+        <label>皮肤：</label>
+        <select id="theme">
+            <option value="light">白天</option>
+            <option value="dark">黑夜</option>
+            <option value="eyeCare">护眼</option>
+        </select>
+    </div>
+    <!-- <input type="file" id="fileInput" accept=".txt"> -->
+    <div class="container">
+        <div class="chapter-list" id="chapterList" style="display: none;"></div>
+        <div class="content" id="content" contenteditable="false"></div>
+                <span id="chapterWordCount" style="position: absolute; right: 0px; top: 0px; width: 5px; writing-mode: vertical-rl; font-size: 0.8em; color: #666;"></span>
+        <div id="editStatus" style="display: none; position: absolute; left: 10px; top: 10px; background: #ffc107; color: #333; padding: 3px 8px; border-radius: 4px; font-size: 0.9em;">编辑模式</div>
+
+    </div>
+    <div id="chapterButtons" class="chapter-buttons" style="display: none;">
+        <button id="prevChapterBottom">上一章</button>
+        <button id="nextChapterBottom">下一章</button>
+    </div>
+    
+    <script src="../js/settings-handler.js"></script>
+    <script src="../js/edit-handler.js"></script>
+    <script src="../js/reader-functions.js"></script>
+    <script src="../js/book-detail.js"></script>
+</body>
+</html>
