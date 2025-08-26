@@ -100,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         console.log('查询的键:', encodeURIComponent(book.name));
                         console.log('查询结果:', getRequest.result);
                         if (fileContent) {
-                            const url = new URL('page/book-detail.html', window.location.origin);
+                            const url = new URL('txt-reader/page/book-detail.html', window.location.origin);
                             url.searchParams.set('bookName', encodeURIComponent(book.name));
                             window.location.href = url.toString();
                         } else {
@@ -298,4 +298,5 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
         });
     }
+
 });
