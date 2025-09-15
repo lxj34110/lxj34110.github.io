@@ -18,7 +18,7 @@ h1 {
 }
 
 #deleteSelected{
-    font-size: 21px;
+    font-size: 25px;
 }
 
 .custom-file-button {
@@ -76,10 +76,50 @@ h1 {
     width: 100%;
 }
 
+/* 书籍标识样式 */
+.book-tag {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 0.7em;
+    font-weight: bold;
+    color: white;
+    z-index: 10;
+}
+
+.reading-tag {
+    background-color: #4CAF50; /* 绿色表示阅读 */
+}
+
+.draft-tag {
+    background-color: #FF9800; /* 橙色表示草稿 */
+}
+
+/* 阅读书籍和草稿书籍的样式差异 */
+.reading-book {
+    border: 2px solid #4CAF50;
+}
+
+.draft-book {
+    border: 2px solid #FF9800;
+}
+
+.reading-book:hover {
+    border-color: #45a049;
+    box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2);
+}
+
+.draft-book:hover {
+    border-color: #f57c00;
+    box-shadow: 0 4px 8px rgba(255, 152, 0, 0.2);
+}
+
 .book-tool {
     display: flex;
-    gap: 10px;
-    margin-left: 15px;
+    gap: 7px;
+    margin-left: 10px;
     font-size: 1.5em;
     height: 1.5em;
     align-items: center;
@@ -96,6 +136,7 @@ h1 {
     flex-direction: column;
     align-items: center;
     gap: 8px;
+    position: relative;
 }
 /* .book-list {
     width: 100%;
@@ -128,9 +169,21 @@ h1 {
     font-weight: bold;
     margin: 1px 0;
     height: 130px;
+    word-wrap: break-word;
 }
 
 .book-date{
     font-size: 0.7em;
     margin-top: auto;
+}
+
+.book-info {
+    /* font-size: 0.7em; */
+    width: 130px;
+}
+
+svg {
+    width: 20px;
+    height: 20px;
+    margin: 5px 0px 0 0;
 }
