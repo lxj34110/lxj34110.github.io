@@ -1,9 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0;url=login.html">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TXT阅读器</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            text-align: center;
+            background: #ffffff;
+            border-radius: 0.75rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            padding: 2rem;
+            max-width: 600px;
+            width: 90%;
+        }
+        h1 {
+            color: #111827;
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+        p {
+            color: #6b7280;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+        }
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .btn:hover {
+            background-color: #45a049;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        .btn-secondary {
+            background-color: #2196F3;
+        }
+        .btn-secondary:hover {
+            background-color: #1976D2;
+        }
+        .btn-third {
+            background-color: #FF9800;
+        }
+        .btn-third:hover {
+            background-color: #F57C00;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <h1>TXT阅读器</h1>
+        <p>欢迎使用TXT阅读器！您可以在这里管理和阅读您的文本文件。</p>
+        <div class="button-group">
+            <a href="book-shelf.html" class="btn">书架</a>
+            <a href="word-draft.html" class="btn btn-secondary">文档编辑</a>
+            <a href="debug-draft.html" class="btn btn-third">调试页面</a>
+        </div>
+    </div>
 </body>
 </html>
