@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>草稿编辑器</title>
     <link rel="stylesheet" href="../css/word-draft.css">
-    <script src="../js/word-draft.js"></script>
 </head>
 <body>
     <h2>
@@ -47,7 +46,11 @@
     <div class="container">
         <div class="editor-section">
             <input type="text" id="fileName" placeholder="文件名">
-            <textarea id="content" placeholder="输入内容..."></textarea>
+            <div class="content-wrapper" style="position: relative;">
+                <textarea id="content" placeholder="输入内容..."></textarea>
+                <span id="wordCount" style="position: absolute; right: 15px; top: 5px; font-size: 0.8em; color: #666; background-color: rgba(255, 255, 255, 0.8); padding: 2px 5px; border-radius: 3px;"></span>
+                <div id="progressBar" style="position: absolute; left: 0; top: 0; width: 3px; background-color: #007bff; height: 0%; transition: height 0.1s ease; z-index: 100;"></div>
+            </div>
         </div>
         
         <div class="log-section">
@@ -62,6 +65,7 @@
         </div>
     </div>
 
-    <!-- JavaScript 代码已移至 word-draft.js -->
+    <!-- JavaScript 代码移至body底部以确保DOM完全加载 -->
+    <script src="../js/word-draft.js"></script>
 </body>
 </html>
