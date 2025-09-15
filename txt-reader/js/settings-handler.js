@@ -12,9 +12,15 @@ function applySettings(settings) {
 
 // 初始化设置
 function initSettings(settingsDB, callback) {
-    if (!settingsDB) return;
+    // 直接尝试初始化数据库，不管是否传入了settingsDB
+    const stores = [{ name: 'settingsStore', keyPath: 'id' }];
     
-    window.indexedDBHelper.getDataByKey('readingSettings', 'globalSettings')
+    window.indexedDBHelper.initDB('readingSettings', 1, stores)
+        .then(db => {
+            console.log('readingSettings数据库初始化成功');
+            // 数据库初始化成功后，尝试获取设置
+            return window.indexedDBHelper.getDataByKey('readingSettings', 'settingsStore', 'globalSettings');
+        })
         .then(result => {
             const savedSettings = result ? result.settings : {};
             const settings = {
@@ -64,7 +70,7 @@ function setupSettingsEventListeners(settingsDB) {
             applySettings(settings);
             if (settingsDB) {
                 const settingsData = { id: 'globalSettings', settings: settings };
-                window.indexedDBHelper.updateData('readingSettings', settingsData)
+                window.indexedDBHelper.updateData('readingSettings', 'settingsStore', settingsData)
                     .catch(error => {
                         console.error('保存设置失败:', error);
                     });
