@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Pages 数据同步演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        warning: '#F59E0B',
+                        info: '#3B82F6',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            }
+            .transition-all-300 {
+                transition: all 0.3s ease;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <header class="mb-8 text-center">
+            <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gray-800 mb-2">GitHub Pages 数据同步演示</h1>
+            <p class="text-gray-600">使用IndexedDB和浏览器缓存实现数据管理与同步</p>
+        </header>
+
+        <!-- 数据库状态指示器 -->
+        <div id="db-status" class="mb-6 px-4 py-3 rounded-lg bg-yellow-50 text-yellow-700 hidden">
+            <i class="fa fa-spinner fa-spin mr-2"></i>正在初始化数据库...
+        </div>
+
+        <!-- 同步状态指示器 -->
+        <div id="sync-status" class="mb-6 px-4 py-3 rounded-lg bg-blue-50 text-blue-700 hidden">
+            <i class="fa fa-cloud mr-2"></i>同步状态：未连接
+        </div>
+
+        <!-- 操作卡片 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- 添加/编辑表单 -->
+            <div class="lg:col-span-1 bg-white rounded-xl p-6 card-shadow transition-all-300 hover:shadow-lg">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                    <i class="fa fa-plus-circle text-primary mr-2"></i>添加/编辑数据
+                </h2>
+                <form id="data-form" class="space-y-4">
+                    <input type="hidden" id="item-id">
+                    <div>
+                        <label for="item-name" class="block text-sm font-medium text-gray-700 mb-1">名称</label>
+                        <input type="text" id="item-name" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all-300" placeholder="请输入名称">
+                    </div>
+                    <div>
+                        <label for="item-description" class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                        <textarea id="item-description" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all-300" placeholder="请输入描述"></textarea>
+                    </div>
+                    <div>
+                        <label for="item-category" class="block text-sm font-medium text-gray-700 mb-1">分类</label>
+                        <select id="item-category" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all-300">
+                            <option value="产品">产品</option>
+                            <option value="服务">服务</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    <div class="pt-2">
+                        <button type="submit" id="submit-btn" class="w-full bg-primary text-white py-3 px-4 rounded-lg font-medium hover:bg-primary/90 focus:ring-4 focus:ring-primary/20 transition-all-300 flex items-center justify-center">
+                            <i class="fa fa-save mr-2"></i>保存数据
+                        </button>
+                        <button type="button" id="cancel-btn" class="w-full mt-2 bg-gray-200 text-gray-700 py-3 px-4 rounded-lg font-medium hover:bg-gray-300 focus:ring-4 focus:ring-gray-200 transition-all-300 hidden">
+                            取消编辑
+                        </button>
+                    </div>
+                </form>
+
+                <!-- 同步设置 -->
+                <div class="mt-6 pt-6 border-t border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                        <i class="fa fa-sync-alt text-info mr-2"></i>数据同步
+                    </h2>
+                    
+                    <!-- 导出/导入数据 -->
+                    <div class="space-y-3">
+                        <button id="export-data" class="w-full bg-secondary text-white py-2 px-4 rounded-lg font-medium hover:bg-secondary/90 focus:ring-4 focus:ring-secondary/20 transition-all-300 flex items-center justify-center">
+                            <i class="fa fa-download mr-2"></i>导出数据
+                        </button>
+                        <button id="import-data" class="w-full bg-info text-white py-2 px-4 rounded-lg font-medium hover:bg-info/90 focus:ring-4 focus:ring-info/20 transition-all-300 flex items-center justify-center">
+                            <i class="fa fa-upload mr-2"></i>导入数据
+                        </button>
+                        <input type="file" id="import-file" accept=".json" class="hidden">
+                    </div>
+                </div>
+            </div>
+
+            <!-- 搜索和统计 -->
+            <div class="lg:col-span-2 bg-white rounded-xl p-6 card-shadow transition-all-300 hover:shadow-lg">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div class="text-xl font-semibold text-gray-800">
+                        <i class="fa fa-list-alt text-info mr-2"></i>数据列表
+                    </div>
+                    <div class="flex gap-3">
+                        <div class="relative flex-grow md:flex-grow-0 md:w-64">
+                            <input type="text" id="search-input" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all-300" placeholder="搜索名称...">
+                            <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        </div>
+                        <button id="clear-search" class="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-all-300 hidden">
+                            <i class="fa fa-times"></i>
+                        </button>
+                        <button id="refresh-btn" class="px-4 py-2 bg-info text-white rounded-lg hover:bg-info/90 focus:ring-4 focus:ring-info/20 transition-all-300">
+                            <i class="fa fa-refresh mr-1"></i>刷新
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 统计信息 -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                        <p class="text-sm text-blue-500 font-medium">总记录数</p>
+                        <p id="total-count" class="text-2xl font-bold text-blue-700">0</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                        <p class="text-sm text-green-500 font-medium">产品分类</p>
+                        <p id="product-count" class="text-2xl font-bold text-green-700">0</p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500">
+                        <p class="text-sm text-purple-500 font-medium">服务分类</p>
+                        <p id="service-count" class="text-2xl font-bold text-purple-700">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据列表 -->
+        <div class="bg-white rounded-xl p-6 card-shadow mb-8 transition-all-300 hover:shadow-lg">
+            <div id="empty-state" class="py-12 text-center hidden">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                    <i class="fa fa-folder-open-o text-gray-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-700 mb-1">暂无数据</h3>
+                <p class="text-gray-500">点击上方表单添加您的第一条数据</p>
+            </div>
+            
+            <div id="search-result-empty" class="py-12 text-center hidden">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                    <i class="fa fa-search text-gray-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-700 mb-1">未找到匹配的数据</h3>
+                <p class="text-gray-500">请尝试使用其他关键词搜索</p>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table id="data-table" class="w-full min-w-full">
+                    <thead>
+                        <tr class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th class="px-6 py-3 rounded-tl-lg">ID</th>
+                            <th class="px-6 py-3">名称</th>
+                            <th class="px-6 py-3">描述</th>
+                            <th class="px-6 py-3">分类</th>
+                            <th class="px-6 py-3 rounded-tr-lg">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="data-list" class="bg-white divide-y divide-gray-200">
+                        <!-- 数据将通过JavaScript动态填充 -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- 分页控制 (模拟) -->
+            <div class="mt-6 flex items-center justify-between border-t border-gray-200 pt-4">
+                <div class="flex-1 flex justify-between sm:hidden">
+                    <button id="prev-page-mobile" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        上一页
+                    </button>
+                    <button id="next-page-mobile" class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        下一页
+                    </button>
+                </div>
+                <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                    <div>
+                        <p class="text-sm text-gray-700">
+                            显示
+                            <span id="showing-start">1</span>
+                            到
+                            <span id="showing-end">0</span>
+                            条，共
+                            <span id="showing-total">0</span>
+                            条结果
+                        </p>
+                    </div>
+                    <div>
+                        <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                            <button id="prev-page" class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">上一页</span>
+                                <i class="fa fa-chevron-left"></i>
+                            </button>
+                            <button class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-primary text-sm font-medium text-white">
+                                1
+                            </button>
+                            <button id="next-page" class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                                <span class="sr-only">下一页</span>
+                                <i class="fa fa-chevron-right"></i>
+                            </button>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认删除对话框 -->
+    <div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
+            <div class="p-6">
+                <div class="text-center mb-4">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+                        <i class="fa fa-exclamation-triangle text-red-500 text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-800">确认删除</h3>
+                    <p class="text-gray-600 mt-2">您确定要删除这条数据吗？此操作无法撤销。</p>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button id="cancel-delete" class="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all-300">
+                        取消
+                    </button>
+                    <button id="confirm-delete" class="flex-1 py-2 px-4 bg-red-500 border border-transparent rounded-lg font-medium text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all-300">
+                        确认删除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成功提示 -->
+    <div id="success-toast" class="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center">
+        <i class="fa fa-check-circle mr-2"></i>
+        <span id="toast-message">操作成功!</span>
+    </div>
+
+    <script>
+        // 数据库配置
+        const DB_NAME = 'GitHubSyncDemo';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'items';
+        
+        // 同步配置
+        const SYNC_STORAGE_KEY = 'github_sync_data';
+        const SYNC_TIMESTAMP_KEY = 'github_sync_timestamp';
+        let syncManager = null;
+        
+        // 应用状态
+        let currentEditingId = null;
+        let deleteItemId = null;
+        let allItems = [];
+        let searchQuery = '';
+        
+        // DOM 元素
+        const dbStatus = document.getElementById('db-status');
+        const syncStatus = document.getElementById('sync-status');
+        const dataForm = document.getElementById('data-form');
+        const itemIdInput = document.getElementById('item-id');
+        const itemNameInput = document.getElementById('item-name');
+        const itemDescriptionInput = document.getElementById('item-description');
+        const itemCategoryInput = document.getElementById('item-category');
+        const submitBtn = document.getElementById('submit-btn');
+        const cancelBtn = document.getElementById('cancel-btn');
+        const dataList = document.getElementById('data-list');
+        const emptyState = document.getElementById('empty-state');
+        const searchResultEmpty = document.getElementById('search-result-empty');
+        const searchInput = document.getElementById('search-input');
+        const clearSearchBtn = document.getElementById('clear-search');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const deleteModal = document.getElementById('delete-modal');
+        const modalContent = document.getElementById('modal-content');
+        const cancelDeleteBtn = document.getElementById('cancel-delete');
+        const confirmDeleteBtn = document.getElementById('confirm-delete');
+        const successToast = document.getElementById('success-toast');
+        const toastMessage = document.getElementById('toast-message');
+        const totalCountEl = document.getElementById('total-count');
+        const productCountEl = document.getElementById('product-count');
+        const serviceCountEl = document.getElementById('service-count');
+        const showingStartEl = document.getElementById('showing-start');
+        const showingEndEl = document.getElementById('showing-end');
+        const showingTotalEl = document.getElementById('showing-total');
+        const exportDataBtn = document.getElementById('export-data');
+        const importDataBtn = document.getElementById('import-data');
+        const importFileInput = document.getElementById('import-file');
+
+        // IndexedDB 辅助类
+        class IndexedDBHelper {
+            constructor() {
+                // 存储数据库连接的Map
+                this.databases = new Map();
+            }
+
+            /**
+             * 初始化IndexedDB数据库
+             * @param {string} dbName - 数据库名称
+             * @param {number} version - 数据库版本
+             * @param {Array} stores - 存储定义数组
+             * @returns {Promise<IDBDatabase>} - 返回数据库连接Promise
+             */
+            async initDB(dbName, version, stores) {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(dbName, version || 1);
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        stores.forEach(store => {
+                            if (!db.objectStoreNames.contains(store.name)) {
+                                const objectStore = db.createObjectStore(store.name, { keyPath: store.keyPath });
+                                if (store.indexes) {
+                                    store.indexes.forEach(index => {
+                                        objectStore.createIndex(index.name, index.keyPath, { unique: index.unique });
+                                    });
+                                }
+                            }
+                        });
+                    };
+
+                    request.onsuccess = (event) => {
+                        const db = event.target.result;
+                        this.databases.set(dbName, db);
+                        resolve(db);
+                    };
+
+                    request.onerror = (event) => {
+                        reject(new Error('IndexedDB初始化错误: ' + event.target.error.message));
+                    };
+                });
+            }
+
+            /**
+             * 获取数据库连接
+             * @param {string} dbName - 数据库名称
+             * @returns {IDBDatabase|null} - 返回数据库连接或null
+             */
+            getDB(dbName) {
+                return this.databases.get(dbName) || null;
+            }
+
+            /**
+             * 添加数据
+             * @param {string} dbName - 数据库名称
+             * @param {string} storeName - 存储名称
+             * @param {*} data - 要添加的数据
+             * @returns {Promise<any>} - 返回操作结果Promise
+             */
+            async addData(dbName, storeName, data) {
+                const db = this.getDB(dbName);
+                if (!db) {
+                    throw new Error('数据库未初始化: ' + dbName);
+                }
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.add(data);
+
+                    request.onsuccess = () => {
+                        resolve(request.result);
+                    };
+
+                    request.onerror = (event) => {
+                        reject(new Error('添加数据错误: ' + event.target.error.message));
+                    };
+                });
+            }
+
+            /**
+             * 获取所有数据
+             * @param {string} dbName - 数据库名称
+             * @param {string} storeName - 存储名称
+             * @returns {Promise<Array>} - 返回数据数组Promise
+             */
+            async getAllData(dbName, storeName) {
+                const db = this.getDB(dbName);
+                if (!db) {
+                    throw new Error('数据库未初始化: ' + dbName);
+                }
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([storeName], 'readonly');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.getAll();
+
+                    request.onsuccess = () => {
+                        resolve(request.result);
+                    };
+
+                    request.onerror = (event) => {
+                        reject(new Error('获取数据错误: ' + event.target.error.message));
+                    };
+                });
+            }
+
+            /**
+             * 更新数据
+             * @param {string} dbName - 数据库名称
+             * @param {string} storeName - 存储名称
+             * @param {*} data - 要更新的数据
+             * @returns {Promise<any>} - 返回操作结果Promise
+             */
+            async updateData(dbName, storeName, data) {
+                const db = this.getDB(dbName);
+                if (!db) {
+                    throw new Error('数据库未初始化: ' + dbName);
+                }
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.put(data);
+
+                    request.onsuccess = () => {
+                        resolve(request.result);
+                    };
+
+                    request.onerror = (event) => {
+                        reject(new Error('更新数据错误: ' + event.target.error.message));
+                    };
+                });
+            }
+
+            /**
+             * 删除数据
+             * @param {string} dbName - 数据库名称
+             * @param {string} storeName - 存储名称
+             * @param {*} key - 数据键
+             * @returns {Promise<void>} - 返回操作结果Promise
+             */
+            async deleteData(dbName, storeName, key) {
+                const db = this.getDB(dbName);
+                if (!db) {
+                    throw new Error('数据库未初始化: ' + dbName);
+                }
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = db.transaction([storeName], 'readwrite');
+                    const store = transaction.objectStore(storeName);
+                    const request = store.delete(key);
+
+                    request.onsuccess = () => {
+                        resolve();
+                    };
+
+                    request.onerror = (event) => {
+                        reject(new Error('删除数据错误: ' + event.target.error.message));
+                    };
+                });
+            }
+        }
+
+        // 创建IndexedDB助手实例
+        const indexedDBHelper = new IndexedDBHelper();
+
+        // 本地同步管理器实现
+        function initLocalSyncManager() {
+            // 使用localStorage作为持久化存储
+            const syncStorage = {
+                get: function(key) {
+                    try {
+                        const item = localStorage.getItem(key);
+                        return item ? JSON.parse(item) : null;
+                    } catch (e) {
+                        console.error('从localStorage读取失败:', e);
+                        return null;
+                    }
+                },
+                set: function(key, value) {
+                    try {
+                        localStorage.setItem(key, JSON.stringify(value));
+                    } catch (e) {
+                        console.error('写入localStorage失败:', e);
+                    }
+                },
+                remove: function(key) {
+                    try {
+                        localStorage.removeItem(key);
+                    } catch (e) {
+                        console.error('从localStorage删除失败:', e);
+                    }
+                }
+            };
+
+            // 实现同步管理器
+            const manager = {
+                // 获取同步数据
+                get: async function() {
+                    return syncStorage.get(SYNC_STORAGE_KEY) || [];
+                },
+                
+                // 设置同步数据
+                set: async function(data) {
+                    syncStorage.set(SYNC_STORAGE_KEY, data);
+                    syncStorage.set(SYNC_TIMESTAMP_KEY, new Date().toISOString());
+                    showSyncStatus(true, '数据已同步到本地存储');
+                },
+                
+                // 更新同步数据
+                update: async function(items) {
+                    try {
+                        const syncData = await this.get();
+                        
+                        // 合并数据（基于时间戳）
+                        items.forEach(newItem => {
+                            const existingIndex = syncData.findIndex(item => item.id === newItem.id);
+                            if (existingIndex >= 0) {
+                                // 如果存在相同ID项，比较时间戳决定是否更新
+                                const existingItem = syncData[existingIndex];
+                                const existingTime = new Date(existingItem.updatedAt || existingItem.createdAt).getTime();
+                                const newTime = new Date(newItem.updatedAt || newItem.createdAt).getTime();
+                                
+                                if (newTime > existingTime) {
+                                    syncData[existingIndex] = { ...newItem };
+                                }
+                            } else {
+                                // 添加新项
+                                syncData.push({ ...newItem });
+                            }
+                        });
+                        
+                        await this.set(syncData);
+                        return syncData;
+                    } catch (error) {
+                        console.error('更新同步数据失败:', error);
+                        showSyncStatus(false, '同步数据更新失败');
+                        throw error;
+                    }
+                },
+                
+                // 监听变更
+                on: function(event, callback) {
+                    // 模拟事件监听
+                    if (event === 'value') {
+                        // 使用setInterval模拟定期检查变更
+                        const intervalId = setInterval(async () => {
+                            try {
+                                const data = await this.get();
+                                callback({ val: () => data });
+                            } catch (error) {
+                                console.error('监听同步数据变更失败:', error);
+                            }
+                        }, 5000); // 每5秒检查一次
+                        
+                        return { off: () => clearInterval(intervalId) };
+                    }
+                },
+                
+                // 导出数据
+                exportData: async function() {
+                    const data = await this.get();
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const dataStr = JSON.stringify({
+                        version: '1.0',
+                        exportDate: timestamp,
+                        data: data
+                    }, null, 2);
+                    
+                    const blob = new Blob([dataStr], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `github-sync-data-${timestamp}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showToast('数据导出成功');
+                },
+                
+                // 导入数据
+                importData: async function(fileContent) {
+                    try {
+                        const parsedData = JSON.parse(fileContent);
+                        
+                        // 验证数据格式
+                        if (!parsedData.data || !Array.isArray(parsedData.data)) {
+                            throw new Error('无效的数据格式');
+                        }
+                        
+                        // 导入数据到同步存储
+                        await this.set(parsedData.data);
+                        
+                        // 同时更新IndexedDB
+                        const db = indexedDBHelper.getDB(DB_NAME);
+                        if (db) {
+                            const transaction = db.transaction([STORE_NAME], 'readwrite');
+                            const store = transaction.objectStore(STORE_NAME);
+                            
+                            // 先清空现有数据
+                            await new Promise((resolve, reject) => {
+                                const clearRequest = store.clear();
+                                clearRequest.onsuccess = resolve;
+                                clearRequest.onerror = reject;
+                            });
+                            
+                            // 导入新数据
+                            for (const item of parsedData.data) {
+                                await new Promise((resolve, reject) => {
+                                    const addRequest = store.add(item);
+                                    addRequest.onsuccess = resolve;
+                                    addRequest.onerror = reject;
+                                });
+                            }
+                        }
+                        
+                        showToast('数据导入成功');
+                        await loadData(); // 重新加载数据
+                        return true;
+                    } catch (error) {
+                        console.error('导入数据失败:', error);
+                        showToast('导入数据失败: ' + error.message);
+                        return false;
+                    }
+                }
+            };
+            
+            return manager;
+        }
+
+        // 初始化本地数据库
+        async function initLocalDatabase() {
+            try {
+                showDbStatus(true);
+                await indexedDBHelper.initDB(DB_NAME, DB_VERSION, [{
+                    name: STORE_NAME,
+                    keyPath: 'id',
+                    indexes: [
+                        { name: 'name', keyPath: 'name', unique: false },
+                        { name: 'category', keyPath: 'category', unique: false }
+                    ]
+                }]);
+                showDbStatus(false);
+                
+                // 初始化同步管理器
+                syncManager = initLocalSyncManager();
+                
+                // 启动本地同步
+                startLocalSync();
+                
+                // 加载数据
+                await loadData();
+            } catch (error) {
+                console.error('初始化数据库失败:', error);
+                showDbStatus(false, '初始化数据库失败: ' + error.message);
+            }
+        }
+
+        // 启动本地同步
+        async function startLocalSync() {
+            try {
+                showSyncStatus(true, '正在同步数据...');
+                
+                // 从同步存储获取数据
+                const syncData = await syncManager.get();
+                
+                // 从本地数据库获取数据
+                const localData = await indexedDBHelper.getAllData(DB_NAME, STORE_NAME);
+                
+                // 合并数据
+                const mergedData = mergeData(localData, syncData);
+                
+                // 如果有新数据，更新本地数据库
+                if (mergedData.length > 0) {
+                    for (const item of mergedData) {
+                        // 检查是否存在该ID的数据
+                        const existingItem = localData.find(local => local.id === item.id);
+                        if (!existingItem) {
+                            // 添加新数据
+                            await indexedDBHelper.addData(DB_NAME, STORE_NAME, item);
+                        } else {
+                            // 比较时间戳决定是否更新
+                            const existingTime = new Date(existingItem.updatedAt || existingItem.createdAt).getTime();
+                            const syncTime = new Date(item.updatedAt || item.createdAt).getTime();
+                            
+                            if (syncTime > existingTime) {
+                                await indexedDBHelper.updateData(DB_NAME, STORE_NAME, item);
+                            }
+                        }
+                    }
+                }
+                
+                // 保存当前数据到同步存储
+                await syncManager.set(mergedData);
+                
+                // 监听同步数据变化
+                const unsubscribe = syncManager.on('value', async (snapshot) => {
+                    try {
+                        await syncFromLocal(snapshot);
+                    } catch (error) {
+                        console.error('同步数据更新失败:', error);
+                        showSyncStatus(false, '同步数据更新失败');
+                    }
+                });
+                
+                showSyncStatus(true, '数据同步成功');
+                
+                return unsubscribe;
+            } catch (error) {
+                console.error('启动同步失败:', error);
+                showSyncStatus(false, '启动同步失败: ' + error.message);
+            }
+        }
+
+        // 从本地同步存储同步数据
+        async function syncFromLocal(snapshot) {
+            try {
+                const syncData = snapshot.val() || [];
+                const localData = await indexedDBHelper.getAllData(DB_NAME, STORE_NAME);
+                
+                // 检查是否有新的或更新的数据
+                const hasNewData = syncData.some(syncItem => {
+                    const localItem = localData.find(item => item.id === syncItem.id);
+                    if (!localItem) return true;
+                    
+                    const localTime = new Date(localItem.updatedAt || localItem.createdAt).getTime();
+                    const syncTime = new Date(syncItem.updatedAt || syncItem.createdAt).getTime();
+                    
+                    return syncTime > localTime;
+                });
+                
+                // 检查是否有被删除的数据
+                const hasDeletedData = localData.some(localItem => 
+                    !syncData.find(syncItem => syncItem.id === localItem.id)
+                );
+                
+                if (hasNewData || hasDeletedData) {
+                    // 合并数据
+                    const mergedData = mergeData(localData, syncData);
+                    
+                    // 更新本地数据库
+                    const db = indexedDBHelper.getDB(DB_NAME);
+                    const transaction = db.transaction([STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    
+                    // 先清空现有数据
+                    await new Promise((resolve, reject) => {
+                        const clearRequest = store.clear();
+                        clearRequest.onsuccess = resolve;
+                        clearRequest.onerror = reject;
+                    });
+                    
+                    // 添加合并后的数据
+                    for (const item of mergedData) {
+                        await new Promise((resolve, reject) => {
+                            const addRequest = store.add(item);
+                            addRequest.onsuccess = resolve;
+                            addRequest.onerror = reject;
+                        });
+                    }
+                    
+                    // 重新加载数据
+                    await loadData();
+                    showToast('数据已从同步存储更新');
+                }
+            } catch (error) {
+                console.error('从同步存储同步数据失败:', error);
+                throw error;
+            }
+        }
+
+        // 将数据同步到本地存储
+        async function syncToLocal() {
+            try {
+                const localData = await indexedDBHelper.getAllData(DB_NAME, STORE_NAME);
+                await syncManager.update(localData);
+                showSyncStatus(true, '数据已同步');
+                return true;
+            } catch (error) {
+                console.error('同步数据到本地存储失败:', error);
+                showSyncStatus(false, '同步失败: ' + error.message);
+                return false;
+            }
+        }
+
+        // 合并数据
+        function mergeData(localData, syncData) {
+            const merged = [...localData];
+            
+            syncData.forEach(syncItem => {
+                const localIndex = merged.findIndex(item => item.id === syncItem.id);
+                if (localIndex >= 0) {
+                    // 比较时间戳决定是否更新
+                    const localTime = new Date(merged[localIndex].updatedAt || merged[localIndex].createdAt).getTime();
+                    const syncTime = new Date(syncItem.updatedAt || syncItem.createdAt).getTime();
+                    
+                    if (syncTime > localTime) {
+                        merged[localIndex] = { ...syncItem };
+                    }
+                } else {
+                    merged.push({ ...syncItem });
+                }
+            });
+            
+            // 按ID排序
+            merged.sort((a, b) => a.id - b.id);
+            
+            return merged;
+        }
+
+        // 导出同步数据
+        async function exportSyncData() {
+            try {
+                if (syncManager) {
+                    await syncManager.exportData();
+                } else {
+                    showToast('同步管理器未初始化', 2000);
+                }
+            } catch (error) {
+                console.error('导出数据失败:', error);
+                showToast('导出数据失败: ' + error.message);
+            }
+        }
+
+        // 导入同步数据
+        async function importSyncData() {
+            importFileInput.click();
+        }
+
+        // 处理文件导入
+        async function handleFileImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            try {
+                const content = await readFileAsync(file);
+                if (syncManager) {
+                    await syncManager.importData(content);
+                } else {
+                    showToast('同步管理器未初始化', 2000);
+                }
+            } catch (error) {
+                console.error('文件读取失败:', error);
+                showToast('文件读取失败: ' + error.message);
+            } finally {
+                // 重置文件输入
+                importFileInput.value = '';
+            }
+        }
+
+        // 读取文件为文本
+        function readFileAsync(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (event) => resolve(event.target.result);
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+
+        // 显示数据库状态
+        function showDbStatus(loading, message) {
+            if (loading) {
+                dbStatus.classList.remove('hidden', 'bg-green-50', 'text-green-700', 'bg-red-50', 'text-red-700');
+                dbStatus.classList.add('bg-yellow-50', 'text-yellow-700');
+                dbStatus.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>正在初始化数据库...';
+            } else if (message) {
+                dbStatus.classList.remove('hidden', 'bg-yellow-50', 'text-yellow-700', 'bg-green-50', 'text-green-700');
+                dbStatus.classList.add('bg-red-50', 'text-red-700');
+                dbStatus.innerHTML = '<i class="fa fa-exclamation-circle mr-2"></i>' + message;
+            } else {
+                dbStatus.classList.add('hidden');
+            }
+        }
+
+        // 显示同步状态
+        function showSyncStatus(connected, message) {
+            syncStatus.classList.remove('hidden', 'bg-green-50', 'text-green-700', 'bg-red-50', 'text-red-700', 'bg-yellow-50', 'text-yellow-700');
+            
+            if (connected) {
+                syncStatus.classList.add('bg-green-50', 'text-green-700');
+                syncStatus.innerHTML = '<i class="fa fa-check-circle mr-2"></i>' + message;
+            } else {
+                syncStatus.classList.add('bg-red-50', 'text-red-700');
+                syncStatus.innerHTML = '<i class="fa fa-exclamation-circle mr-2"></i>' + message;
+            }
+        }
+
+        // 加载数据
+        async function loadData() {
+            try {
+                allItems = await indexedDBHelper.getAllData(DB_NAME, STORE_NAME);
+                renderDataList();
+                updateStatistics();
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                showToast('加载数据失败: ' + error.message);
+            }
+        }
+
+        // 渲染数据列表
+        function renderDataList() {
+            let filteredItems = allItems;
+            
+            // 搜索过滤
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                filteredItems = allItems.filter(item => 
+                    item.name.toLowerCase().includes(query)
+                );
+            }
+            
+            // 清空列表
+            dataList.innerHTML = '';
+            
+            // 显示空状态或搜索结果为空状态
+            if (filteredItems.length === 0) {
+                if (searchQuery) {
+                    searchResultEmpty.classList.remove('hidden');
+                    emptyState.classList.add('hidden');
+                } else {
+                    searchResultEmpty.classList.add('hidden');
+                    emptyState.classList.remove('hidden');
+                }
+                showingStartEl.textContent = '0';
+                showingEndEl.textContent = '0';
+                showingTotalEl.textContent = '0';
+                return;
+            }
+            
+            // 隐藏空状态
+            searchResultEmpty.classList.add('hidden');
+            emptyState.classList.add('hidden');
+            
+            // 渲染列表项
+            filteredItems.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors duration-150';
+                
+                // 设置分类样式
+                let categoryClass = '';
+                let categoryIcon = '';
+                if (item.category === '产品') {
+                    categoryClass = 'bg-green-100 text-green-800';
+                    categoryIcon = '<i class="fa fa-cube mr-1"></i>';
+                } else if (item.category === '服务') {
+                    categoryClass = 'bg-purple-100 text-purple-800';
+                    categoryIcon = '<i class="fa fa-handshake-o mr-1"></i>';
+                } else {
+                    categoryClass = 'bg-gray-100 text-gray-800';
+                    categoryIcon = '<i class="fa fa-question-circle mr-1"></i>';
+                }
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="font-medium text-gray-900">${item.name}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-500 line-clamp-2 max-w-xs">${item.description || '-'}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${categoryClass}">
+                            ${categoryIcon}${item.category}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button class="text-primary hover:text-primary/80 mr-4 edit-btn" data-id="${item.id}">
+                            <i class="fa fa-pencil mr-1"></i>编辑
+                        </button>
+                        <button class="text-danger hover:text-danger/80 delete-btn" data-id="${item.id}">
+                            <i class="fa fa-trash mr-1"></i>删除
+                        </button>
+                    </td>
+                `;
+                
+                dataList.appendChild(row);
+            });
+            
+            // 更新分页信息
+            showingStartEl.textContent = filteredItems.length > 0 ? '1' : '0';
+            showingEndEl.textContent = filteredItems.length;
+            showingTotalEl.textContent = filteredItems.length;
+            
+            // 添加编辑和删除事件监听
+            document.querySelectorAll('.edit-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = parseInt(btn.getAttribute('data-id'));
+                    editItem(id);
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = parseInt(btn.getAttribute('data-id'));
+                    showDeleteModal(id);
+                });
+            });
+        }
+
+        // 更新统计信息
+        function updateStatistics() {
+            const total = allItems.length;
+            const productCount = allItems.filter(item => item.category === '产品').length;
+            const serviceCount = allItems.filter(item => item.category === '服务').length;
+            
+            // 带动画更新数字
+            animateNumber(totalCountEl, 0, total);
+            animateNumber(productCountEl, 0, productCount);
+            animateNumber(serviceCountEl, 0, serviceCount);
+        }
+
+        // 数字动画
+        function animateNumber(element, start, end, duration = 500) {
+            let startTime = null;
+            const animate = timestamp => {
+                if (!startTime) startTime = timestamp;
+                const progress = Math.min((timestamp - startTime) / duration, 1);
+                const current = Math.floor(progress * (end - start) + start);
+                element.textContent = current;
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+            requestAnimationFrame(animate);
+        }
+
+        // 编辑项目
+        function editItem(id) {
+            const item = allItems.find(item => item.id === id);
+            if (item) {
+                currentEditingId = id;
+                itemIdInput.value = item.id;
+                itemNameInput.value = item.name;
+                itemDescriptionInput.value = item.description || '';
+                itemCategoryInput.value = item.category;
+                submitBtn.innerHTML = '<i class="fa fa-pencil mr-2"></i>更新数据';
+                submitBtn.classList.remove('bg-primary');
+                submitBtn.classList.add('bg-warning');
+                cancelBtn.classList.remove('hidden');
+                
+                // 滚动到表单
+                document.getElementById('data-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        // 重置表单
+        function resetForm() {
+            currentEditingId = null;
+            dataForm.reset();
+            submitBtn.innerHTML = '<i class="fa fa-save mr-2"></i>保存数据';
+            submitBtn.classList.remove('bg-warning');
+            submitBtn.classList.add('bg-primary');
+            cancelBtn.classList.add('hidden');
+        }
+
+        // 显示删除确认对话框
+        function showDeleteModal(id) {
+            deleteItemId = id;
+            deleteModal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // 隐藏删除确认对话框
+        function hideDeleteModal() {
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                deleteModal.classList.add('hidden');
+                deleteItemId = null;
+            }, 300);
+        }
+
+        // 显示提示消息
+        function showToast(message, duration = 3000) {
+            toastMessage.textContent = message;
+            successToast.classList.remove('translate-y-20', 'opacity-0');
+            successToast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                successToast.classList.remove('translate-y-0', 'opacity-100');
+                successToast.classList.add('translate-y-20', 'opacity-0');
+            }, duration);
+        }
+
+        // 处理表单提交
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const name = itemNameInput.value.trim();
+            const description = itemDescriptionInput.value.trim();
+            const category = itemCategoryInput.value;
+            
+            if (!name) {
+                showToast('请输入名称', 2000);
+                itemNameInput.focus();
+                return;
+            }
+            
+            try {
+                if (currentEditingId) {
+                    // 更新数据
+                    const updatedItem = {
+                        id: currentEditingId,
+                        name,
+                        description,
+                        category,
+                        updatedAt: new Date().toISOString()
+                    };
+                    await indexedDBHelper.updateData(DB_NAME, STORE_NAME, updatedItem);
+                    showToast('数据更新成功！');
+                } else {
+                    // 添加数据
+                    const newItem = {
+                        id: Date.now(), // 使用时间戳作为临时ID
+                        name,
+                        description,
+                        category,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString()
+                    };
+                    await indexedDBHelper.addData(DB_NAME, STORE_NAME, newItem);
+                    showToast('数据添加成功！');
+                }
+                
+                resetForm();
+                await loadData();
+                
+                // 同步数据到本地存储
+                await syncToLocal();
+            } catch (error) {
+                console.error('保存数据失败:', error);
+                showToast('保存数据失败: ' + error.message);
+            }
+        }
+
+        // 事件监听器
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化数据库
+            initLocalDatabase();
+            
+            // 表单提交
+            dataForm.addEventListener('submit', handleFormSubmit);
+            
+            // 取消编辑
+            cancelBtn.addEventListener('click', resetForm);
+            
+            // 刷新数据
+            refreshBtn.addEventListener('click', loadData);
+            
+            // 搜索
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value.trim();
+                if (searchQuery) {
+                    clearSearchBtn.classList.remove('hidden');
+                } else {
+                    clearSearchBtn.classList.add('hidden');
+                }
+                renderDataList();
+            });
+            
+            // 清除搜索
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                searchQuery = '';
+                clearSearchBtn.classList.add('hidden');
+                renderDataList();
+            });
+            
+            // 删除对话框
+            cancelDeleteBtn.addEventListener('click', hideDeleteModal);
+            confirmDeleteBtn.addEventListener('click', async () => {
+                if (deleteItemId) {
+                    try {
+                        await indexedDBHelper.deleteData(DB_NAME, STORE_NAME, deleteItemId);
+                        showToast('数据删除成功！');
+                        hideDeleteModal();
+                        await loadData();
+                        
+                        // 同步数据到本地存储
+                        await syncToLocal();
+                    } catch (error) {
+                        console.error('删除数据失败:', error);
+                        showToast('删除数据失败: ' + error.message);
+                    }
+                }
+            });
+            
+            // 点击对话框外部关闭
+            deleteModal.addEventListener('click', (e) => {
+                if (e.target === deleteModal) {
+                    hideDeleteModal();
+                }
+            });
+            
+            // 导出/导入数据
+            exportDataBtn.addEventListener('click', exportSyncData);
+            importDataBtn.addEventListener('click', importSyncData);
+            importFileInput.addEventListener('change', handleFileImport);
+        });
+    </script>
+</body>
+</html>
