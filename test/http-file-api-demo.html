@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTTP文件中转API演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet"> -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#6b7280',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        info: '#3b82f6',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .transition-all-300 {
+                transition: all 0.3s ease;
+            }
+            .shadow-soft {
+                box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-inter text-gray-800">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- 页面标题 -->
+        <header class="mb-8 text-center">
+            <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-gray-800 mb-2">
+                <i class="fa fa-exchange text-primary mr-2"></i>HTTP文件中转API演示
+            </h1>
+            <p class="text-gray-600 max-w-2xl mx-auto">
+                这个页面演示如何通过HTTP请求调用文件中转API，实现文件的上传、列出、下载和删除功能。
+                所有操作都在浏览器中通过IndexedDB完成。
+            </p>
+        </header>
+
+        <!-- 数据库状态指示器 -->
+        <div id="dbStatus" class="mb-6 p-4 rounded-lg bg-gray-100 flex items-center justify-between shadow-soft">
+            <div class="flex items-center">
+                <i id="statusIcon" class="fa fa-database text-yellow-500 text-xl mr-2"></i>
+                <span id="statusText" class="font-medium">数据库初始化中...</span>
+            </div>
+            <div class="text-sm text-gray-500" id="fileCount">文件数量: 0</div>
+        </div>
+
+        <!-- 功能区 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- 文件上传区 -->
+            <div class="bg-white rounded-xl p-6 shadow-soft">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-upload text-primary mr-2"></i>文件上传
+                </h2>
+                
+                <!-- 拖放上传区域 -->
+                <div id="dropArea" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center transition-all-300 hover:border-primary cursor-pointer mb-4">
+                    <i class="fa fa-file-o text-4xl text-gray-400 mb-3"></i>
+                    <p class="mb-2">将文件拖放到此处，或点击选择文件</p>
+                    <p class="text-sm text-gray-500">支持所有文件类型，大小不限</p>
+                    <input type="file" id="fileInput" class="hidden" multiple>
+                </div>
+
+                <!-- 上传进度条 -->
+                <div id="progressContainer" class="hidden mb-4">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span id="uploadFileName">文件名</span>
+                        <span id="uploadProgressPercent">0%</span>
+                    </div>
+                    <div class="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div id="progressBar" class="h-full bg-primary rounded-full transition-all" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- 上传按钮 -->
+                <button id="uploadBtn" class="w-full bg-primary hover:bg-primary/90 text-white font-medium py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center">
+                    <i class="fa fa-cloud-upload mr-2"></i>开始上传
+                </button>
+            </div>
+
+            <!-- HTTP API调用演示区 -->
+            <div class="bg-white rounded-xl p-6 shadow-soft">
+                <h2 class="text-xl font-semibold mb-4 flex items-center">
+                    <i class="fa fa-code text-primary mr-2"></i>API调用演示
+                </h2>
+                
+                <!-- API调用类型选择 -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">选择API调用类型</label>
+                    <select id="apiCallType" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="list">获取文件列表</option>
+                        <option value="info">获取文件信息</option>
+                        <option value="download">下载文件</option>
+                        <option value="delete">删除文件</option>
+                        <option value="clear">清空所有文件</option>
+                    </select>
+                </div>
+
+                <!-- 文件ID输入框（部分API需要） -->
+                <div id="fileIdContainer" class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">文件ID</label>
+                    <input type="text" id="fileIdInput" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="请输入文件ID">
+                </div>
+
+                <!-- 调用按钮 -->
+                <button id="apiCallBtn" class="w-full bg-secondary hover:bg-secondary/90 text-white font-medium py-2 px-4 rounded-lg transition-all-300 flex items-center justify-center">
+                    <i class="fa fa-play-circle mr-2"></i>执行API调用
+                </button>
+            </div>
+        </div>
+
+        <!-- 响应结果显示区 -->
+        <div class="bg-white rounded-xl p-6 shadow-soft mb-8">
+            <h2 class="text-xl font-semibold mb-4 flex items-center">
+                <i class="fa fa-terminal text-primary mr-2"></i>API响应结果
+            </h2>
+            <div id="responseContainer" class="bg-gray-50 p-4 rounded-lg h-64 overflow-auto text-sm font-mono text-gray-800 border border-gray-200">
+                <p class="text-gray-500 italic">API响应结果将显示在这里...</p>
+            </div>
+        </div>
+
+        <!-- 文件列表 -->
+        <div class="bg-white rounded-xl p-6 shadow-soft">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold flex items-center">
+                    <i class="fa fa-files-o text-primary mr-2"></i>已上传文件列表
+                </h2>
+                <div class="flex space-x-2">
+                    <select id="fileStatusFilter" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="all">全部文件</option>
+                        <option value="uploading">上传中</option>
+                        <option value="completed">已完成</option>
+                        <option value="failed">上传失败</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 文件列表表格 -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">文件ID</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">文件名</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">大小</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">上传时间</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileList" class="bg-white divide-y divide-gray-200">
+                        <!-- 文件列表将通过JavaScript动态生成 -->
+                        <tr>
+                            <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                                <i class="fa fa-folder-open-o text-3xl mb-2 block"></i>
+                                暂无文件，请上传文件
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入必要的脚本 -->
+    <script src="js/indexeddb-helper.js"></script>
+    <script src="js/file-transfer-api.js"></script>
+    <script src="js/http-file-api.js"></script>
+
+    <!-- 演示脚本 -->
+    <script>
+        // DOM元素
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const uploadFileName = document.getElementById('uploadFileName');
+        const uploadProgressPercent = document.getElementById('uploadProgressPercent');
+        const apiCallType = document.getElementById('apiCallType');
+        const fileIdContainer = document.getElementById('fileIdContainer');
+        const fileIdInput = document.getElementById('fileIdInput');
+        const apiCallBtn = document.getElementById('apiCallBtn');
+        const responseContainer = document.getElementById('responseContainer');
+        const fileList = document.getElementById('fileList');
+        const fileStatusFilter = document.getElementById('fileStatusFilter');
+        const dbStatus = document.getElementById('dbStatus');
+        const statusIcon = document.getElementById('statusIcon');
+        const statusText = document.getElementById('statusText');
+        const fileCount = document.getElementById('fileCount');
+
+        // 当前选择的文件
+        let selectedFiles = [];
+
+        // 初始化API
+        async function initApp() {
+            try {
+                // 初始化HTTP File API
+                await window.httpFileAPI.init();
+                
+                // 更新数据库状态
+                statusIcon.className = 'fa fa-check-circle text-green-500 text-xl mr-2';
+                statusText.textContent = '数据库已就绪';
+                dbStatus.classList.remove('bg-gray-100');
+                dbStatus.classList.add('bg-green-50');
+                
+                // 加载文件列表
+                await loadFileList();
+                
+                console.log('应用初始化成功');
+            } catch (error) {
+                console.error('应用初始化失败:', error);
+                statusIcon.className = 'fa fa-exclamation-circle text-red-500 text-xl mr-2';
+                statusText.textContent = '数据库初始化失败';
+                dbStatus.classList.remove('bg-gray-100');
+                dbStatus.classList.add('bg-red-50');
+                
+                showResponse(`初始化失败: ${error.message}`);
+            }
+        }
+
+        // 加载文件列表
+        async function loadFileList() {
+            try {
+                const statusFilter = fileStatusFilter.value;
+                const response = await window.fileTransferClient.list({ status: statusFilter });
+                
+                if (response.success) {
+                    const files = response.data;
+                    renderFileList(files);
+                    updateFileCount(files.length);
+                } else {
+                    showResponse(`加载文件列表失败: ${response.error}`);
+                }
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+                showResponse(`加载文件列表失败: ${error.message}`);
+            }
+        }
+
+        // 渲染文件列表
+        function renderFileList(files) {
+            fileList.innerHTML = '';
+            
+            if (files.length === 0) {
+                fileList.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="px-6 py-10 text-center text-gray-500">
+                            <i class="fa fa-folder-open-o text-3xl mb-2 block"></i>
+                            暂无文件，请上传文件
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            files.forEach(file => {
+                const fileSize = formatFileSize(file.fileSize);
+                const uploadDate = new Date(file.uploadDate).toLocaleString();
+                const statusClass = getStatusClass(file.status);
+                const statusText = getStatusText(file.status);
+                
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-all-300';
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${file.id}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-800">
+                        <div class="flex items-center">
+                            <i class="fa fa-file-o text-primary mr-2"></i>
+                            ${file.fileName}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${fileSize}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${uploadDate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                            ${statusText}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div class="flex space-x-2">
+                            <button class="text-primary hover:text-primary/80 transition-colors" data-id="${file.id}" onclick="handleDownload('${file.id}')">
+                                <i class="fa fa-download"></i>
+                            </button>
+                            <button class="text-danger hover:text-danger/80 transition-colors" data-id="${file.id}" onclick="handleDelete('${file.id}')">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                            <button class="text-secondary hover:text-secondary/80 transition-colors" data-id="${file.id}" onclick="copyFileId('${file.id}')">
+                                <i class="fa fa-copy"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                fileList.appendChild(row);
+            });
+        }
+
+        // 获取状态样式类
+        function getStatusClass(status) {
+            switch (status) {
+                case 'uploading':
+                    return 'bg-blue-100 text-blue-800';
+                case 'completed':
+                    return 'bg-green-100 text-green-800';
+                case 'failed':
+                    return 'bg-red-100 text-red-800';
+                default:
+                    return 'bg-gray-100 text-gray-800';
+            }
+        }
+
+        // 获取状态文本
+        function getStatusText(status) {
+            switch (status) {
+                case 'uploading':
+                    return '上传中';
+                case 'completed':
+                    return '已完成';
+                case 'failed':
+                    return '上传失败';
+                default:
+                    return status;
+            }
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 更新文件计数
+        function updateFileCount(count) {
+            fileCount.textContent = `文件数量: ${count}`;
+        }
+
+        // 显示API响应
+        function showResponse(response) {
+            responseContainer.textContent = '';
+            
+            if (typeof response === 'object') {
+                responseContainer.textContent = JSON.stringify(response, null, 2);
+            } else {
+                responseContainer.textContent = response;
+            }
+        }
+
+        // 上传文件
+        async function uploadSelectedFiles() {
+            if (selectedFiles.length === 0) {
+                alert('请先选择要上传的文件');
+                return;
+            }
+            
+            try {
+                progressContainer.classList.remove('hidden');
+                
+                for (const file of selectedFiles) {
+                    uploadFileName.textContent = file.name;
+                    progressBar.style.width = '0%';
+                    uploadProgressPercent.textContent = '0%';
+                    
+                    const response = await window.fileTransferClient.upload(file, {
+                        onProgress: (progress) => {
+                            progressBar.style.width = `${progress.progress}%`;
+                            uploadProgressPercent.textContent = `${progress.progress}%`;
+                        }
+                    });
+                    
+                    if (response.success) {
+                        showResponse(`文件上传成功: ${JSON.stringify(response.data, null, 2)}`);
+                    } else {
+                        showResponse(`文件上传失败: ${response.error}`);
+                        break;
+                    }
+                }
+                
+                // 上传完成后刷新文件列表
+                await loadFileList();
+                
+                // 清空选择的文件
+                selectedFiles = [];
+                fileInput.value = '';
+                
+            } catch (error) {
+                console.error('文件上传失败:', error);
+                showResponse(`文件上传失败: ${error.message}`);
+            }
+        }
+
+        // 执行API调用
+        async function executeAPICall() {
+            const type = apiCallType.value;
+            
+            try {
+                let response;
+                
+                switch (type) {
+                    case 'list':
+                        const statusFilter = fileStatusFilter.value;
+                        response = await window.fileTransferClient.list({ status: statusFilter });
+                        break;
+                    case 'info':
+                        const fileId = fileIdInput.value.trim();
+                        if (!fileId) {
+                            alert('请输入文件ID');
+                            return;
+                        }
+                        response = await window.fileTransferClient.info(fileId);
+                        break;
+                    case 'download':
+                        const downloadFileId = fileIdInput.value.trim();
+                        if (!downloadFileId) {
+                            alert('请输入文件ID');
+                            return;
+                        }
+                        response = await window.fileTransferClient.download(downloadFileId);
+                        
+                        if (response.success) {
+                            // 创建下载链接并触发下载
+                            const link = document.createElement('a');
+                            link.href = response.data.fileUrl;
+                            link.download = response.data.fileName;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(response.data.fileUrl); // 释放URL对象
+                        }
+                        break;
+                    case 'delete':
+                        const deleteFileId = fileIdInput.value.trim();
+                        if (!deleteFileId) {
+                            alert('请输入文件ID');
+                            return;
+                        }
+                        if (confirm(`确定要删除文件ID为 ${deleteFileId} 的文件吗？`)) {
+                            response = await window.fileTransferClient.delete(deleteFileId);
+                            await loadFileList(); // 删除后刷新列表
+                        }
+                        break;
+                    case 'clear':
+                        if (confirm('确定要清空所有文件吗？此操作不可恢复！')) {
+                            response = await window.fileTransferClient.clear();
+                            await loadFileList(); // 清空后刷新列表
+                        }
+                        break;
+                    default:
+                        response = { success: false, error: '未知的API调用类型' };
+                }
+                
+                if (response) {
+                    showResponse(response);
+                }
+                
+            } catch (error) {
+                console.error('API调用失败:', error);
+                showResponse(`API调用失败: ${error.message}`);
+            }
+        }
+
+        // 全局函数
+        window.handleDownload = async function(fileId) {
+            try {
+                fileIdInput.value = fileId;
+                apiCallType.value = 'download';
+                await executeAPICall();
+            } catch (error) {
+                console.error('下载文件失败:', error);
+                showResponse(`下载文件失败: ${error.message}`);
+            }
+        };
+
+        window.handleDelete = async function(fileId) {
+            try {
+                fileIdInput.value = fileId;
+                apiCallType.value = 'delete';
+                await executeAPICall();
+            } catch (error) {
+                console.error('删除文件失败:', error);
+                showResponse(`删除文件失败: ${error.message}`);
+            }
+        };
+
+        window.copyFileId = function(fileId) {
+            navigator.clipboard.writeText(fileId).then(() => {
+                alert('文件ID已复制到剪贴板');
+                fileIdInput.value = fileId;
+            }).catch(err => {
+                console.error('复制失败:', err);
+            });
+        };
+
+        // 事件监听
+        document.addEventListener('DOMContentLoaded', () => {
+            // 初始化应用
+            initApp();
+            
+            // 拖放上传事件
+            dropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropArea.classList.add('border-primary', 'bg-primary/5');
+            });
+            
+            dropArea.addEventListener('dragleave', () => {
+                dropArea.classList.remove('border-primary', 'bg-primary/5');
+            });
+            
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropArea.classList.remove('border-primary', 'bg-primary/5');
+                
+                if (e.dataTransfer.files.length > 0) {
+                    selectedFiles = Array.from(e.dataTransfer.files);
+                    alert(`已选择 ${selectedFiles.length} 个文件`);
+                }
+            });
+            
+            // 点击选择文件
+            dropArea.addEventListener('click', () => {
+                fileInput.click();
+            });
+            
+            // 文件选择变化
+            fileInput.addEventListener('change', () => {
+                if (fileInput.files.length > 0) {
+                    selectedFiles = Array.from(fileInput.files);
+                    alert(`已选择 ${selectedFiles.length} 个文件`);
+                }
+            });
+            
+            // 上传按钮点击
+            uploadBtn.addEventListener('click', uploadSelectedFiles);
+            
+            // API调用按钮点击
+            apiCallBtn.addEventListener('click', executeAPICall);
+            
+            // API调用类型变化
+            apiCallType.addEventListener('change', () => {
+                const type = apiCallType.value;
+                if (type === 'info' || type === 'download' || type === 'delete') {
+                    fileIdContainer.classList.remove('hidden');
+                } else {
+                    fileIdContainer.classList.add('hidden');
+                }
+            });
+            
+            // 文件状态筛选变化
+            fileStatusFilter.addEventListener('change', loadFileList);
+        });
+    </script>
+</body>
+</html>
