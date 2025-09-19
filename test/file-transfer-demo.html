@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件中转功能演示</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet"> -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        warning: '#F59E0B',
+                        info: '#3B82F6',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-shadow {
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            }
+            .transition-all-300 {
+                transition: all 0.3s ease;
+            }
+            .file-drop-active {
+                border-color: #4F46E5 !important;
+                background-color: rgba(79, 70, 229, 0.05) !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <header class="mb-8 text-center">
+            <h1 class="text-[clamp(1.8rem,4vw,2.5rem)] font-bold text-gray-800 mb-2">文件中转功能演示</h1>
+            <p class="text-gray-600">基于IndexedDB实现的文件缓存和中转功能</p>
+        </header>
+
+        <!-- 状态指示器 -->
+        <div id="db-status" class="mb-6 px-4 py-3 rounded-lg bg-yellow-50 text-yellow-700 hidden">
+            <i class="fa fa-spinner fa-spin mr-2"></i>正在初始化文件中转服务...
+        </div>
+
+        <!-- 操作区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- 文件上传区域 -->
+            <div class="lg:col-span-1 bg-white rounded-xl p-6 card-shadow transition-all-300 hover:shadow-lg">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">
+                    <i class="fa fa-upload text-primary mr-2"></i>上传文件
+                </h2>
+                
+                <!-- 拖放上传区域 -->
+                <div id="file-drop-area" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-6 transition-all-300 hover:border-gray-400">
+                    <i class="fa fa-cloud-upload text-4xl text-gray-400 mb-3"></i>
+                    <p class="text-gray-500 mb-3">拖放文件到此处，或</p>
+                    <label class="inline-block bg-primary text-white py-2 px-4 rounded-lg font-medium hover:bg-primary/90 focus:ring-4 focus:ring-primary/20 transition-all-300 cursor-pointer">
+                        <i class="fa fa-folder-open mr-2"></i>选择文件
+                        <input type="file" id="file-input" class="hidden" multiple>
+                    </label>
+                    <p class="text-xs text-gray-400 mt-3">支持多种文件格式，文件将缓存在本地</p>
+                </div>
+                
+                <!-- 上传队列 -->
+                <div id="upload-queue" class="space-y-3">
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">上传队列</h3>
+                    <div id="empty-queue" class="text-gray-500 text-sm text-center py-4">
+                        暂无上传任务
+                    </div>
+                    <!-- 上传任务将动态添加到这里 -->
+                </div>
+            </div>
+
+            <!-- 文件列表区域 -->
+            <div class="lg:col-span-2 bg-white rounded-xl p-6 card-shadow transition-all-300 hover:shadow-lg">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div class="text-xl font-semibold text-gray-800">
+                        <i class="fa fa-files-o text-info mr-2"></i>已缓存文件
+                    </div>
+                    <div class="flex gap-3">
+                        <div class="relative flex-grow md:flex-grow-0 md:w-64">
+                            <input type="text" id="search-input" class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all-300" placeholder="搜索文件名...">
+                            <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                        </div>
+                        <button id="clear-search" class="px-3 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-all-300 hidden">
+                            <i class="fa fa-times"></i>
+                        </button>
+                        <button id="refresh-btn" class="px-4 py-2 bg-info text-white rounded-lg hover:bg-info/90 focus:ring-4 focus:ring-info/20 transition-all-300">
+                            <i class="fa fa-refresh mr-1"></i>刷新
+                        </button>
+                        <button id="clear-all-btn" class="px-4 py-2 bg-danger text-white rounded-lg hover:bg-danger/90 focus:ring-4 focus:ring-danger/20 transition-all-300">
+                            <i class="fa fa-trash mr-1"></i>清空
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 统计信息 -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
+                        <p class="text-sm text-blue-500 font-medium">总文件数</p>
+                        <p id="total-files" class="text-2xl font-bold text-blue-700">0</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                        <p class="text-sm text-green-500 font-medium">已完成</p>
+                        <p id="completed-files" class="text-2xl font-bold text-green-700">0</p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg border-l-4 border-purple-500">
+                        <p class="text-sm text-purple-500 font-medium">总大小</p>
+                        <p id="total-size" class="text-2xl font-bold text-purple-700">0 KB</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据列表 -->
+        <div class="bg-white rounded-xl p-6 card-shadow mb-8 transition-all-300 hover:shadow-lg">
+            <div id="empty-state" class="py-12 text-center hidden">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                    <i class="fa fa-folder-open-o text-gray-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-700 mb-1">暂无文件</h3>
+                <p class="text-gray-500">上传文件以开始使用文件中转功能</p>
+            </div>
+            
+            <div id="search-result-empty" class="py-12 text-center hidden">
+                <div class="inline-flex items-center justify-center w-16 h-16 bg-gray-100 rounded-full mb-4">
+                    <i class="fa fa-search text-gray-400 text-2xl"></i>
+                </div>
+                <h3 class="text-lg font-medium text-gray-700 mb-1">未找到匹配的文件</h3>
+                <p class="text-gray-500">请尝试使用其他关键词搜索</p>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table id="file-table" class="w-full min-w-full">
+                    <thead>
+                        <tr class="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th class="px-6 py-3 rounded-tl-lg">文件名</th>
+                            <th class="px-6 py-3">大小</th>
+                            <th class="px-6 py-3">类型</th>
+                            <th class="px-6 py-3">上传时间</th>
+                            <th class="px-6 py-3">状态</th>
+                            <th class="px-6 py-3 rounded-tr-lg">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="file-list" class="bg-white divide-y divide-gray-200">
+                        <!-- 文件列表将通过JavaScript动态填充 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 确认删除对话框 -->
+    <div id="delete-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="modal-content">
+            <div class="p-6">
+                <div class="text-center mb-4">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+                        <i class="fa fa-exclamation-triangle text-red-500 text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-800">确认删除</h3>
+                    <p class="text-gray-600 mt-2">您确定要删除此文件吗？此操作无法撤销。</p>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button id="cancel-delete" class="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all-300">
+                        取消
+                    </button>
+                    <button id="confirm-delete" class="flex-1 py-2 px-4 bg-red-500 border border-transparent rounded-lg font-medium text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all-300">
+                        确认删除
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 清空所有确认对话框 -->
+    <div id="clear-all-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 transform transition-all duration-300 scale-95 opacity-0" id="clear-all-modal-content">
+            <div class="p-6">
+                <div class="text-center mb-4">
+                    <div class="inline-flex items-center justify-center w-16 h-16 bg-red-100 rounded-full mb-4">
+                        <i class="fa fa-exclamation-circle text-red-500 text-2xl"></i>
+                    </div>
+                    <h3 class="text-lg font-medium text-gray-800">确认清空所有文件</h3>
+                    <p class="text-gray-600 mt-2">您确定要删除所有缓存的文件吗？此操作无法撤销。</p>
+                </div>
+                <div class="flex gap-3 mt-6">
+                    <button id="cancel-clear-all" class="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200 transition-all-300">
+                        取消
+                    </button>
+                    <button id="confirm-clear-all" class="flex-1 py-2 px-4 bg-red-500 border border-transparent rounded-lg font-medium text-white hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all-300">
+                        确认清空
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 成功提示 -->
+    <div id="success-toast" class="fixed bottom-6 right-6 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center">
+        <i class="fa fa-check-circle mr-2"></i>
+        <span id="toast-message">操作成功!</span>
+    </div>
+
+    <!-- 引入必要的JS文件 -->
+    <script src="js/indexeddb-helper.js"></script>
+    <script src="js/file-transfer-api.js"></script>
+    <script>
+        // 全局变量
+        let allFiles = [];
+        let searchQuery = '';
+        let deleteFileId = null;
+        let activeUploads = new Map(); // 跟踪活跃的上传任务
+        
+        // DOM 元素
+        const dbStatus = document.getElementById('db-status');
+        const fileDropArea = document.getElementById('file-drop-area');
+        const fileInput = document.getElementById('file-input');
+        const uploadQueue = document.getElementById('upload-queue');
+        const emptyQueue = document.getElementById('empty-queue');
+        const fileList = document.getElementById('file-list');
+        const emptyState = document.getElementById('empty-state');
+        const searchResultEmpty = document.getElementById('search-result-empty');
+        const searchInput = document.getElementById('search-input');
+        const clearSearchBtn = document.getElementById('clear-search');
+        const refreshBtn = document.getElementById('refresh-btn');
+        const clearAllBtn = document.getElementById('clear-all-btn');
+        const deleteModal = document.getElementById('delete-modal');
+        const modalContent = document.getElementById('modal-content');
+        const cancelDeleteBtn = document.getElementById('cancel-delete');
+        const confirmDeleteBtn = document.getElementById('confirm-delete');
+        const clearAllModal = document.getElementById('clear-all-modal');
+        const clearAllModalContent = document.getElementById('clear-all-modal-content');
+        const cancelClearAllBtn = document.getElementById('cancel-clear-all');
+        const confirmClearAllBtn = document.getElementById('confirm-clear-all');
+        const successToast = document.getElementById('success-toast');
+        const toastMessage = document.getElementById('toast-message');
+        const totalFilesEl = document.getElementById('total-files');
+        const completedFilesEl = document.getElementById('completed-files');
+        const totalSizeEl = document.getElementById('total-size');
+        
+        // 初始化文件中转API
+        async function initFileTransferAPI() {
+            try {
+                showDbStatus(true);
+                await window.fileTransferAPI.init();
+                showDbStatus(false);
+                await loadFiles();
+                setupEventListeners();
+            } catch (error) {
+                console.error('初始化文件中转API失败:', error);
+                showDbStatus(false, '初始化文件中转服务失败: ' + error.message);
+            }
+        }
+        
+        // 显示数据库状态
+        function showDbStatus(loading, message) {
+            if (loading) {
+                dbStatus.textContent = '正在初始化文件中转服务...';
+                dbStatus.classList.remove('hidden', 'bg-green-50', 'text-green-700', 'bg-red-50', 'text-red-700');
+                dbStatus.classList.add('bg-yellow-50', 'text-yellow-700');
+                dbStatus.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i>正在初始化文件中转服务...';
+            } else if (message) {
+                dbStatus.textContent = message;
+                dbStatus.classList.remove('hidden', 'bg-yellow-50', 'text-yellow-700', 'bg-green-50', 'text-green-700');
+                dbStatus.classList.add('bg-red-50', 'text-red-700');
+                dbStatus.innerHTML = '<i class="fa fa-exclamation-circle mr-2"></i>' + message;
+            } else {
+                dbStatus.classList.add('hidden');
+            }
+        }
+        
+        // 加载文件列表
+        async function loadFiles() {
+            try {
+                allFiles = await window.fileTransferAPI.getFileList({ status: 'all' });
+                renderFileList();
+                updateStatistics();
+                updateUploadQueueVisibility();
+            } catch (error) {
+                console.error('加载文件列表失败:', error);
+                showToast('加载文件列表失败: ' + error.message);
+            }
+        }
+        
+        // 渲染文件列表
+        function renderFileList() {
+            let filteredFiles = allFiles;
+            
+            // 搜索过滤
+            if (searchQuery) {
+                const query = searchQuery.toLowerCase();
+                filteredFiles = allFiles.filter(file => 
+                    file.fileName.toLowerCase().includes(query)
+                );
+            }
+            
+            // 清空列表
+            fileList.innerHTML = '';
+            
+            // 显示空状态或搜索结果为空状态
+            if (filteredFiles.length === 0) {
+                if (searchQuery) {
+                    searchResultEmpty.classList.remove('hidden');
+                    emptyState.classList.add('hidden');
+                } else {
+                    searchResultEmpty.classList.add('hidden');
+                    emptyState.classList.remove('hidden');
+                }
+                return;
+            }
+            
+            // 隐藏空状态
+            searchResultEmpty.classList.add('hidden');
+            emptyState.classList.add('hidden');
+            
+            // 渲染列表项
+            filteredFiles.forEach(file => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 transition-colors duration-150';
+                
+                // 设置状态样式
+                let statusClass = '';
+                let statusText = '';
+                let statusIcon = '';
+                
+                switch (file.status) {
+                    case 'uploading':
+                        statusClass = 'bg-blue-100 text-blue-800';
+                        statusText = '上传中';
+                        statusIcon = '<i class="fa fa-spinner fa-spin mr-1"></i>';
+                        break;
+                    case 'completed':
+                        statusClass = 'bg-green-100 text-green-800';
+                        statusText = '已完成';
+                        statusIcon = '<i class="fa fa-check mr-1"></i>';
+                        break;
+                    case 'failed':
+                        statusClass = 'bg-red-100 text-red-800';
+                        statusText = '上传失败';
+                        statusIcon = '<i class="fa fa-times mr-1"></i>';
+                        break;
+                    default:
+                        statusClass = 'bg-gray-100 text-gray-800';
+                        statusText = '未知';
+                        statusIcon = '<i class="fa fa-question-circle mr-1"></i>';
+                }
+                
+                // 格式化文件大小
+                const fileSize = formatFileSize(file.fileSize);
+                
+                // 格式化上传时间
+                const formattedDate = new Date(file.uploadDate).toLocaleString('zh-CN');
+                
+                // 获取文件扩展名/类型图标
+                const fileIcon = getFileIcon(file.fileName);
+                
+                // 生成操作按钮
+                let actionButtons = '';
+                if (file.status === 'completed') {
+                    actionButtons = `
+                        <button class="text-primary hover:text-primary/80 mr-4 download-btn" data-id="${file.id}">
+                            <i class="fa fa-download mr-1"></i>下载
+                        </button>
+                        <button class="text-danger hover:text-danger/80 delete-btn" data-id="${file.id}">
+                            <i class="fa fa-trash mr-1"></i>删除
+                        </button>
+                    `;
+                } else if (file.status === 'failed') {
+                    actionButtons = `
+                        <button class="text-warning hover:text-warning/80 mr-4 retry-btn" data-id="${file.id}">
+                            <i class="fa fa-refresh mr-1"></i>重试
+                        </button>
+                        <button class="text-danger hover:text-danger/80 delete-btn" data-id="${file.id}">
+                            <i class="fa fa-trash mr-1"></i>删除
+                        </button>
+                    `;
+                } else {
+                    actionButtons = `
+                        <button class="text-danger hover:text-danger/80 cancel-btn" data-id="${file.id}">
+                            <i class="fa fa-times mr-1"></i>取消
+                        </button>
+                    `;
+                }
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0 h-10 w-10 flex items-center justify-center bg-gray-100 rounded-md">
+                                ${fileIcon}
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900">${file.fileName}</div>
+                                <div class="text-xs text-gray-500">${file.id}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">${fileSize}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-500">${file.fileType || '未知'}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${formattedDate}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}">
+                            ${statusIcon}${statusText}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        ${actionButtons}
+                    </td>
+                `;
+                
+                fileList.appendChild(row);
+            });
+            
+            // 添加事件监听
+            document.querySelectorAll('.download-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    downloadFile(id);
+                });
+            });
+            
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    showDeleteModal(id);
+                });
+            });
+            
+            document.querySelectorAll('.retry-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    retryUpload(id);
+                });
+            });
+            
+            document.querySelectorAll('.cancel-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const id = btn.getAttribute('data-id');
+                    cancelUpload(id);
+                });
+            });
+        }
+        
+        // 更新统计信息
+        function updateStatistics() {
+            const total = allFiles.length;
+            const completed = allFiles.filter(file => file.status === 'completed').length;
+            const totalSizeBytes = allFiles.reduce((sum, file) => sum + file.fileSize, 0);
+            const totalSize = formatFileSize(totalSizeBytes);
+            
+            // 更新统计数字
+            totalFilesEl.textContent = total;
+            completedFilesEl.textContent = completed;
+            totalSizeEl.textContent = totalSize;
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // 获取文件图标
+        function getFileIcon(fileName) {
+            const extension = fileName.split('.').pop().toLowerCase();
+            const iconMap = {
+                'pdf': '<i class="fa fa-file-pdf-o text-red-500"></i>',
+                'doc': '<i class="fa fa-file-word-o text-blue-500"></i>',
+                'docx': '<i class="fa fa-file-word-o text-blue-500"></i>',
+                'xls': '<i class="fa fa-file-excel-o text-green-500"></i>',
+                'xlsx': '<i class="fa fa-file-excel-o text-green-500"></i>',
+                'ppt': '<i class="fa fa-file-powerpoint-o text-orange-500"></i>',
+                'pptx': '<i class="fa fa-file-powerpoint-o text-orange-500"></i>',
+                'jpg': '<i class="fa fa-file-image-o text-purple-500"></i>',
+                'jpeg': '<i class="fa fa-file-image-o text-purple-500"></i>',
+                'png': '<i class="fa fa-file-image-o text-purple-500"></i>',
+                'gif': '<i class="fa fa-file-image-o text-purple-500"></i>',
+                'mp3': '<i class="fa fa-file-audio-o text-green-500"></i>',
+                'mp4': '<i class="fa fa-file-video-o text-red-500"></i>',
+                'zip': '<i class="fa fa-file-zip-o text-yellow-500"></i>',
+                'rar': '<i class="fa fa-file-zip-o text-yellow-500"></i>',
+                'txt': '<i class="fa fa-file-text-o text-gray-500"></i>',
+                'js': '<i class="fa fa-file-code-o text-yellow-500"></i>',
+                'css': '<i class="fa fa-file-code-o text-blue-500"></i>',
+                'html': '<i class="fa fa-file-code-o text-orange-500"></i>',
+            };
+            
+            return iconMap[extension] || '<i class="fa fa-file-o text-gray-500"></i>';
+        }
+        
+        // 上传文件
+        async function uploadFiles(files) {
+            for (const file of files) {
+                try {
+                    // 创建上传任务UI
+                    const uploadTaskId = `upload-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                    const taskElement = createUploadTaskElement(uploadTaskId, file.name);
+                    uploadQueue.appendChild(taskElement);
+                    updateUploadQueueVisibility();
+                    
+                    // 添加到活跃上传任务
+                    activeUploads.set(uploadTaskId, true);
+                    
+                    // 上传文件
+                    await window.fileTransferAPI.uploadFile(file, {
+                        onProgress: (progress) => {
+                            updateUploadProgress(uploadTaskId, progress.progress);
+                        }
+                    });
+                    
+                    // 上传完成，从活跃上传中移除
+                    activeUploads.delete(uploadTaskId);
+                    
+                    // 移除上传任务UI（延迟移除，让用户看到完成状态）
+                    setTimeout(() => {
+                        const element = document.getElementById(uploadTaskId);
+                        if (element) {
+                            element.remove();
+                            updateUploadQueueVisibility();
+                        }
+                    }, 1000);
+                    
+                    // 刷新文件列表
+                    await loadFiles();
+                    
+                    // 显示成功提示
+                    showToast(`文件 "${file.name}" 上传成功！`);
+                } catch (error) {
+                    console.error('文件上传失败:', error);
+                    showToast(`文件 "${file.name}" 上传失败: ${error.message}`);
+                    
+                    // 更新上传任务UI为失败状态
+                    const uploadTaskId = Array.from(uploadQueue.children).find(el => 
+                        el.querySelector('.upload-filename')?.textContent === file.name
+                    )?.id;
+                    
+                    if (uploadTaskId) {
+                        updateUploadStatus(uploadTaskId, 'failed');
+                        activeUploads.delete(uploadTaskId);
+                        
+                        // 延迟移除失败的上传任务
+                        setTimeout(() => {
+                            const element = document.getElementById(uploadTaskId);
+                            if (element) {
+                                element.remove();
+                                updateUploadQueueVisibility();
+                            }
+                        }, 3000);
+                    }
+                    
+                    // 刷新文件列表
+                    await loadFiles();
+                }
+            }
+        }
+        
+        // 创建上传任务UI元素
+        function createUploadTaskElement(taskId, fileName) {
+            const element = document.createElement('div');
+            element.id = taskId;
+            element.className = 'bg-gray-50 rounded-lg p-3 transition-all-300';
+            element.innerHTML = `
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center">
+                        <i class="fa fa-file-o text-gray-500 mr-2"></i>
+                        <span class="text-sm font-medium text-gray-700 upload-filename">${fileName}</span>
+                    </div>
+                    <span class="text-xs text-gray-500 upload-status">上传中...</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div class="bg-primary h-2 rounded-full upload-progress" style="width: 0%"></div>
+                </div>
+            `;
+            return element;
+        }
+        
+        // 更新上传进度
+        function updateUploadProgress(taskId, progress) {
+            const element = document.getElementById(taskId);
+            if (element) {
+                const progressBar = element.querySelector('.upload-progress');
+                const statusText = element.querySelector('.upload-status');
+                
+                if (progressBar) {
+                    progressBar.style.width = `${progress}%`;
+                }
+                
+                if (statusText) {
+                    statusText.textContent = `${progress}%`;
+                }
+                
+                // 上传完成
+                if (progress >= 100) {
+                    statusText.textContent = '完成';
+                    statusText.className = 'text-xs text-green-500 upload-status';
+                    progressBar.className = 'bg-green-500 h-2 rounded-full upload-progress';
+                }
+            }
+        }
+        
+        // 更新上传状态
+        function updateUploadStatus(taskId, status) {
+            const element = document.getElementById(taskId);
+            if (element) {
+                const statusText = element.querySelector('.upload-status');
+                const progressBar = element.querySelector('.upload-progress');
+                
+                if (statusText && progressBar) {
+                    if (status === 'failed') {
+                        statusText.textContent = '失败';
+                        statusText.className = 'text-xs text-red-500 upload-status';
+                        progressBar.className = 'bg-red-500 h-2 rounded-full upload-progress';
+                    }
+                }
+            }
+        }
+        
+        // 更新上传队列可见性
+        function updateUploadQueueVisibility() {
+            // 检查是否有活跃上传任务
+            const hasActiveUploads = activeUploads.size > 0;
+            // 检查是否有上传任务UI元素
+            const hasTaskElements = uploadQueue.querySelectorAll('[id^="upload-"]').length > 0;
+            
+            // 如果有活跃上传任务或上传任务UI元素，显示上传队列
+            if (hasActiveUploads || hasTaskElements) {
+                emptyQueue.classList.add('hidden');
+            } else {
+                emptyQueue.classList.remove('hidden');
+            }
+        }
+        
+        // 下载文件
+        async function downloadFile(fileId) {
+            try {
+                // 获取文件信息
+                const fileInfo = await window.fileTransferAPI.getFileInfo(fileId);
+                if (!fileInfo) {
+                    throw new Error('文件不存在');
+                }
+                
+                // 获取文件内容
+                const blob = await window.fileTransferAPI.getFileContent(fileId);
+                
+                // 创建下载链接并触发下载
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileInfo.fileName;
+                document.body.appendChild(a);
+                a.click();
+                
+                // 清理
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                showToast(`文件 "${fileInfo.fileName}" 开始下载！`);
+            } catch (error) {
+                console.error('文件下载失败:', error);
+                showToast('文件下载失败: ' + error.message);
+            }
+        }
+        
+        // 删除文件
+        async function deleteFile(fileId) {
+            try {
+                await window.fileTransferAPI.deleteFile(fileId);
+                await loadFiles();
+                showToast('文件删除成功！');
+            } catch (error) {
+                console.error('文件删除失败:', error);
+                showToast('文件删除失败: ' + error.message);
+            }
+        }
+        
+        // 重试上传（暂时不实现，因为需要重新选择文件）
+        function retryUpload(fileId) {
+            // 找到对应的文件信息
+            const fileInfo = allFiles.find(file => file.id === fileId);
+            if (fileInfo) {
+                showToast(`请重新选择文件 "${fileInfo.fileName}" 进行上传`);
+                fileInput.click();
+            }
+        }
+        
+        // 取消上传（目前API不支持中断正在进行的上传，这里只做UI处理）
+        function cancelUpload(fileId) {
+            showToast('已取消上传任务');
+            loadFiles();
+        }
+        
+        // 清空所有文件
+        async function clearAllFiles() {
+            try {
+                await window.fileTransferAPI.clearAllFiles();
+                allFiles = [];
+                renderFileList();
+                updateStatistics();
+                showToast('所有文件已清空！');
+            } catch (error) {
+                console.error('清空文件失败:', error);
+                showToast('清空文件失败: ' + error.message);
+            }
+        }
+        
+        // 显示删除确认对话框
+        function showDeleteModal(id) {
+            deleteFileId = id;
+            deleteModal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+        
+        // 隐藏删除确认对话框
+        function hideDeleteModal() {
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                deleteModal.classList.add('hidden');
+                deleteFileId = null;
+            }, 300);
+        }
+        
+        // 显示清空所有确认对话框
+        function showClearAllModal() {
+            clearAllModal.classList.remove('hidden');
+            setTimeout(() => {
+                clearAllModalContent.classList.remove('scale-95', 'opacity-0');
+                clearAllModalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+        
+        // 隐藏清空所有确认对话框
+        function hideClearAllModal() {
+            clearAllModalContent.classList.remove('scale-100', 'opacity-100');
+            clearAllModalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                clearAllModal.classList.add('hidden');
+            }, 300);
+        }
+        
+        // 显示提示消息
+        function showToast(message, duration = 3000) {
+            toastMessage.textContent = message;
+            successToast.classList.remove('translate-y-20', 'opacity-0');
+            successToast.classList.add('translate-y-0', 'opacity-100');
+            
+            setTimeout(() => {
+                successToast.classList.remove('translate-y-0', 'opacity-100');
+                successToast.classList.add('translate-y-20', 'opacity-0');
+            }, duration);
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 文件拖放事件
+            fileDropArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileDropArea.classList.add('file-drop-active');
+            });
+            
+            fileDropArea.addEventListener('dragleave', () => {
+                fileDropArea.classList.remove('file-drop-active');
+            });
+            
+            fileDropArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileDropArea.classList.remove('file-drop-active');
+                
+                if (e.dataTransfer.files.length > 0) {
+                    uploadFiles(e.dataTransfer.files);
+                }
+            });
+            
+            // 文件选择事件
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    uploadFiles(e.target.files);
+                    // 重置文件输入，允许重复选择同一文件
+                    fileInput.value = '';
+                }
+            });
+            
+            // 搜索
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value.trim();
+                if (searchQuery) {
+                    clearSearchBtn.classList.remove('hidden');
+                } else {
+                    clearSearchBtn.classList.add('hidden');
+                }
+                renderFileList();
+            });
+            
+            // 清除搜索
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                searchQuery = '';
+                clearSearchBtn.classList.add('hidden');
+                renderFileList();
+            });
+            
+            // 刷新文件列表
+            refreshBtn.addEventListener('click', loadFiles);
+            
+            // 清空所有文件
+            clearAllBtn.addEventListener('click', showClearAllModal);
+            
+            // 删除对话框事件
+            cancelDeleteBtn.addEventListener('click', hideDeleteModal);
+            
+            confirmDeleteBtn.addEventListener('click', async () => {
+                if (deleteFileId) {
+                    await deleteFile(deleteFileId);
+                    hideDeleteModal();
+                }
+            });
+            
+            // 清空所有对话框事件
+            cancelClearAllBtn.addEventListener('click', hideClearAllModal);
+            
+            confirmClearAllBtn.addEventListener('click', async () => {
+                await clearAllFiles();
+                hideClearAllModal();
+            });
+            
+            // 点击对话框外部关闭
+            deleteModal.addEventListener('click', (e) => {
+                if (e.target === deleteModal) {
+                    hideDeleteModal();
+                }
+            });
+            
+            clearAllModal.addEventListener('click', (e) => {
+                if (e.target === clearAllModal) {
+                    hideClearAllModal();
+                }
+            });
+        }
+        
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initFileTransferAPI();
+        });
+    </script>
+</body>
+</html>
